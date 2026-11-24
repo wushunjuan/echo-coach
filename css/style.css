@@ -147,8 +147,14 @@ button { cursor: pointer; }
 }
 
 .msg.coach {
-  align-items: flex-start;
+  align-items: stretch;
   gap: 10px;
+}
+
+.msg.coach > .coach-reply,
+.msg.coach > .card {
+  width: 100%;
+  max-width: min(90%, 600px);
 }
 
 .en {
@@ -206,6 +212,84 @@ button { cursor: pointer; }
 
 .rephrase .card-label { color: var(--accent-dark); }
 .tips .card-label { color: #8a6b12; }
+
+.card.words { border-left: 4px solid #2f6f8f; }
+.words .card-label { color: #2f6f8f; }
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.card-head .card-label { margin-bottom: 0; }
+
+.chip-mini {
+  min-height: 30px;
+  padding: 4px 11px;
+  font-size: 12px;
+}
+
+.word-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.word-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.word-row:first-child { padding-top: 2px; }
+.word-row:last-child { padding-bottom: 2px; border-bottom: 0; }
+
+.word-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.word-en {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.word-ipa {
+  font-size: 13px;
+  color: #2f6f8f;
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+}
+
+.word-meaning {
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+
+.word-play {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: #fff;
+  font-size: 14px;
+  display: grid;
+  place-items: center;
+}
+
+.word-play:active { transform: scale(0.94); }
 
 .rephrase-text {
   margin: 0 0 12px;

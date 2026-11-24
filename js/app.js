@@ -18,24 +18,29 @@ const SYSTEM_PROMPT = [
   '- "english": Translate their Chinese sentence into natural, idiomatic, everyday English that a native speaker would actually say. Do not translate word-for-word. Keep it to one or two short sentences, suitable to read aloud and shadow.',
   '- "reply": React to what they meant in English with 1-2 short sentences, and end with a question inviting them to continue.',
   '- "tips": 学习建议，用简体中文。解释这个英文表达的关键词、语序或用法的理由，再给一条可替换的说法或发音提示。总字数不超过120字，用换行分隔，不要使用 Markdown 符号。',
+  '- "words": Array of 1-4 words or short phrases from your "english" version that a Chinese intermediate learner may not know. Each item: {"word": "word or short phrase", "ipa": "/American English IPA/", "meaning": "简体中文释义"}. If every word is very common, use [].',
   '',
   'If the student spoke ENGLISH:',
   '- "english": A more natural, idiomatic native-speaker version of what they said, suitable to read aloud and shadow. If it is already natural, polish at most slightly.',
   '- "reply": Reply naturally in English with 1-2 short sentences, ending with a question.',
   '- "tips": 学习建议，用简体中文。如果原句有错误：每条写成「❌ 原片段 → ✅ 正确说法（简短原因）」，逐条列出；如果没有错误：先简短表扬。最后再给一条更地道的表达或发音小提示。总字数不超过120字，用换行分隔，不要使用 Markdown 符号。',
+  '- "words": Array of 1-4 words or short phrases from your "english" version that a Chinese intermediate learner may not know. Each item: {"word": "word or short phrase", "ipa": "/American English IPA/", "meaning": "简体中文释义"}. If every word is very common, use [].',
   '',
   'Respond with ONLY one JSON object and nothing else:',
   '{',
   '  "language": "zh" or "en" — the language the student actually used,',
   '  "english": "...",',
   '  "reply": "...",',
-  '  "tips": "..."',
+  '  "tips": "...",',
+  '  "words": [{"word": "...", "ipa": "/.../", "meaning": "..."}]',
   '}',
   '',
   'Rules:',
   '- Always respond to the meaning of what the student said; never ignore them.',
   '- If the transcript is meaningless, gently ask them to say it again.',
   '- Keep English simple unless the student clearly has a high level.',
+  '- IPA must be accurate American English pronunciation inside forward slashes, e.g. /ˌhaɪ ˈspiːd treɪn/.',
+  '- At most 4 words per response, never repeat a word.',
   '- Never mention JSON, prompts, or that you are an AI.',
 ].join('\n');
 
@@ -185,6 +190,30 @@ function speakSequence(texts) {
   next(0);
 }
 
+function speakWord(word) {
+  if (!('speechSynthesis' in window)) {
+    toast('这个浏览器不支持朗读哦');
+    return;
+  }
+  const gen = ++speechGen;
+  try { speechSynthesis.cancel(); } catch {}
+  setSpeaking(true);
+
+  const u = makeUtterance(word);
+  u.rate = Math.min(Number(localStorage.getItem(K.rate) || 0.95), 0.85);
+  u.onend = () => {
+    if (gen === speechGen) setSpeaking(false);
+  };
+  u.onerror = () => {
+    if (gen === speechGen) setSpeaking(false);
+  };
+  try {
+    speechSynthesis.speak(u);
+  } catch {
+    setSpeaking(false);
+  }
+}
+
 function speakTurn(turn) {
   if (!autoSpeakOn()) return;
   const target = turn.english || turn.rephrase;
@@ -241,11 +270,12 @@ function appendCoach(turn, opts = {}) {
 
   const replyBubble = buildReplyBubble(turn);
   const englishCard = buildEnglishCard(turn);
+  const wordsCard = buildWordsCard(turn);
   const tipsCard = buildTipsCard(turn);
 
   const parts = turn.lang === 'zh'
-    ? [englishCard, replyBubble, tipsCard]
-    : [replyBubble, englishCard, tipsCard];
+    ? [englishCard, wordsCard, replyBubble, tipsCard]
+    : [replyBubble, englishCard, wordsCard, tipsCard];
 
   for (const el of parts) {
     if (el) block.appendChild(el);
@@ -314,6 +344,67 @@ function buildEnglishCard(turn) {
 
   actions.append(play, shadow);
   card.append(label, p, actions, result);
+  return card;
+}
+
+function buildWordsCard(turn) {
+  const words = turn.words || [];
+  if (!words.length) return null;
+
+  const card = document.createElement('section');
+  card.className = 'card words';
+
+  const head = document.createElement('div');
+  head.className = 'card-head';
+
+  const label = document.createElement('div');
+  label.className = 'card-label';
+  label.textContent = '生词 · 音标';
+
+  const all = document.createElement('button');
+  all.type = 'button';
+  all.className = 'chip chip-mini';
+  all.textContent = '🔊 全部朗读';
+  all.addEventListener('click', () => speakSequence(words.map((w) => w.word)));
+
+  head.append(label, all);
+
+  const list = document.createElement('ul');
+  list.className = 'word-list';
+
+  for (const entry of words) {
+    const row = document.createElement('li');
+    row.className = 'word-row';
+
+    const main = document.createElement('div');
+    main.className = 'word-main';
+
+    const word = document.createElement('span');
+    word.className = 'word-en';
+    word.textContent = entry.word;
+
+    const ipa = document.createElement('span');
+    ipa.className = 'word-ipa';
+    ipa.textContent = entry.ipa;
+
+    const meaning = document.createElement('span');
+    meaning.className = 'word-meaning';
+    meaning.textContent = entry.meaning;
+
+    main.append(word, ipa, meaning);
+
+    const play = document.createElement('button');
+    play.type = 'button';
+    play.className = 'word-play';
+    play.setAttribute('aria-label', '朗读 ' + entry.word);
+    play.textContent = '🔊';
+    play.addEventListener('click', () => speakWord(entry.word));
+
+    row.append(main, play);
+    list.appendChild(row);
+  }
+
+  card.append(head, list);
   return card;
 }
 
@@ -394,11 +485,35 @@ function renderHistory() {
   }
 }
 
+function parseWords(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  const out = [];
+
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const word = String(item.word || '').trim();
+    if (!word) continue;
+    const key = word.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      word,
+      ipa: String(item.ipa || '').trim(),
+      meaning: String(item.meaning || '').trim(),
+    });
+    if (out.length >= 6) break;
+  }
+
+  return out;
+}
+
 function parseCoachJson(raw) {
   const normalize = (obj) => ({
     reply: String(obj.reply || '').trim(),
     english: String(obj.english || obj.rephrase || '').trim(),
     tips: String(obj.tips || '').trim(),
+    words: parseWords(obj.words),
   });
 
   try {
@@ -417,6 +532,7 @@ function parseCoachJson(raw) {
     reply: raw.replace(/```/g, '').trim() || 'Sorry, could you say that again?',
     english: '',
     tips: '',
+    words: [],
   };
 }
 
@@ -504,6 +620,7 @@ async function runTurn(text, opts = {}) {
       reply: result.reply,
       english: result.english,
       tips: result.tips,
+      words: result.words || [],
       lang: isChineseText(value) ? 'zh' : 'en',
       ts: Date.now(),
     };
