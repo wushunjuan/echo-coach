@@ -199,6 +199,7 @@ function updateMicUI() {
 }
 
 function updateLangUI() {
+  if (!langBtn) return;
   const zh = state.recogLang === 'zh-CN';
   langBtn.textContent = zh ? '中' : 'EN';
   langBtn.classList.toggle('en', !zh);
@@ -799,12 +800,14 @@ function clearAll() {
 }
 
 function bindEvents() {
-  langBtn.addEventListener('click', () => {
-    state.recogLang = state.recogLang === 'zh-CN' ? 'en-US' : 'zh-CN';
-    localStorage.setItem(K.lang, state.recogLang);
-    updateLangUI();
-    toast(state.recogLang === 'zh-CN' ? '现在说中文，Echo 翻成英文' : 'Now say English');
-  });
+  if (langBtn) {
+    langBtn.addEventListener('click', () => {
+      state.recogLang = state.recogLang === 'zh-CN' ? 'en-US' : 'zh-CN';
+      localStorage.setItem(K.lang, state.recogLang);
+      updateLangUI();
+      toast(state.recogLang === 'zh-CN' ? '现在说中文，Echo 翻成英文' : 'Now say English');
+    });
+  }
 
   micBtn.addEventListener('click', () => {
     if (state.listening) {

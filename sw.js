@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE = 'echo-v1';
+const CACHE = 'echo-v2';
 const ASSETS = [
   './',
   './index.html',
