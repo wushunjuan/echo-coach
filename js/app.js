@@ -521,7 +521,7 @@ function parseCoachJson(raw) {
     reply: String(obj.reply || '').trim(),
     english: String(obj.english || obj.rephrase || '').trim(),
     tips: String(obj.tips || '').trim(),
-    words: parseWords(obj.words),
+    words: parseWords(obj.words || obj.new_words || obj.vocabulary),
   });
 
   try {
@@ -542,6 +542,65 @@ function parseCoachJson(raw) {
     tips: '',
     words: [],
   };
+}
+
+async function fetchWordsFallback(english, key) {
+  const prompt = [
+    'You are a bilingual English-Chinese dictionary for a Chinese learner.',
+    'From the given English sentence, choose 1-3 useful content words or short phrases worth learning.',
+    'Return ONLY valid JSON: {"words":[{"word":"...","ipa":"/American English IPA/","meaning":"简体中文释义"}]}',
+    'Use American English IPA inside forward slashes. Keep meanings concise.',
+  ].join('\n');
+
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 20000);
+
+  let res;
+  try {
+    res = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + key,
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: prompt },
+          { role: 'user', content: english },
+        ],
+        temperature: 0.3,
+        max_tokens: 300,
+        response_format: { type: 'json_object' },
+      }),
+      signal: ctl.signal,
+    });
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!res.ok) return [];
+
+  const data = await res.json();
+  const raw = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+
+  let obj;
+  try {
+    obj = JSON.parse(raw);
+  } catch {
+    const a = raw.indexOf('{');
+    const b = raw.lastIndexOf('}');
+    if (a < 0 || b <= a) return [];
+    try {
+      obj = JSON.parse(raw.slice(a, b + 1));
+    } catch {
+      return [];
+    }
+  }
+
+  return parseWords(obj.words || obj.new_words || obj.vocabulary);
 }
 
 async function askCoach(userText) {
@@ -595,6 +654,13 @@ async function askCoach(userText) {
   const turn = parseCoachJson(raw);
 
   if (!turn.reply) throw new Error('教练这次没说话，再试一次？');
+
+  if (!turn.words.length && turn.english) {
+    try {
+      turn.words = await fetchWordsFallback(turn.english, key);
+    } catch {}
+  }
+
   return turn;
 }
 
