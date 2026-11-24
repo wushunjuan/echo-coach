@@ -990,6 +990,23 @@ function clearAll() {
   toast('对话清空啦');
 }
 
+async function forceUpdate() {
+  toast('正在清理旧缓存…');
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map((r) => r.unregister()));
+  } catch {}
+  try {
+    const keys = await caches.keys();
+    await Promise.all(keys.map((k) => caches.delete(k)));
+  } catch {}
+
+  const url = new URL(location.href);
+  url.searchParams.set('v', '7');
+  url.searchParams.set('t', Date.now().toString());
+  location.replace(url.toString());
+}
+
 function bindEvents() {
   if (langBtn) {
     langBtn.addEventListener('click', () => {
@@ -1029,6 +1046,7 @@ function bindEvents() {
   $('#btnCloseSettings').addEventListener('click', closeSettings);
   $('#settingsForm').addEventListener('submit', saveSettings);
   $('#btnClear').addEventListener('click', clearAll);
+  $('#btnForceUpdate').addEventListener('click', forceUpdate);
 
   rateInput.addEventListener('input', () => {
     rateLabel.textContent = Number(rateInput.value).toFixed(2) + '×';
@@ -1057,6 +1075,15 @@ function init() {
   updateLangUI();
 
   if ('serviceWorker' in navigator) {
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      if (sessionStorage.getItem('echo.swReloaded') === '1') return;
+      refreshing = true;
+      sessionStorage.setItem('echo.swReloaded', '1');
+      location.reload();
+    });
+
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js').catch(() => {});
     });

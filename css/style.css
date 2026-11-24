@@ -75,6 +75,19 @@ button { cursor: pointer; }
   letter-spacing: 0.22em;
 }
 
+.brand-text .ver {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #f3e2c8;
+  color: var(--accent-dark);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  vertical-align: 1px;
+}
+
 .icon-btn {
   width: 42px;
   height: 42px;
@@ -713,6 +726,11 @@ input[type="range"] {
 .hint.tiny {
   margin: 14px 0 0;
   text-align: center;
+}
+
+.ghost-btn.full {
+  width: 100%;
+  margin-top: 10px;
 }
 
 @media (min-width: 640px) {

@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="css/style.css?v=6">
+<link rel="stylesheet" href="css/style.css?v=7">
 </head>
 <body>
 <div id="app">
@@ -22,7 +22,7 @@
       <span class="logo" aria-hidden="true">E</span>
       <div class="brand-text">
         <h1>Echo</h1>
-        <p>英语语音陪练</p>
+        <p>英语语音陪练 <span class="ver">v7</span></p>
       </div>
     </div>
     <div class="top-actions">
@@ -88,10 +88,12 @@
       <button type="submit" class="primary-btn">保存</button>
     </div>
 
-    <p class="hint tiny"><span id="appVersion">Echo v6</span> · iPhone 用 Safari 打开后「分享 → 添加到主屏幕」，就能像 App 一样用啦。</p>
+    <button type="button" class="ghost-btn full" id="btnForceUpdate">强制更新到最新版</button>
+
+    <p class="hint tiny"><span id="appVersion">Echo v7</span> · iPhone 用 Safari 打开后「分享 → 添加到主屏幕」，就能像 App 一样用啦。</p>
   </form>
 </dialog>
 
-<script src="js/app.js?v=6"></script>
+<script src="js/app.js?v=7"></script>
 </body>
 </html>
