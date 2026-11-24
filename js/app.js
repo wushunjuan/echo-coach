@@ -7,22 +7,34 @@ const K = {
   rate: 'echo.rate',
   autoSpeak: 'echo.autoSpeak',
   history: 'echo.history',
+  lang: 'echo.recogLang',
 };
 
 const SYSTEM_PROMPT = [
   'You are Echo, a warm and encouraging English speaking coach for a Chinese learner.',
-  'The student speaks English and their sentence is transcribed by speech recognition, so ignore punctuation, casing and obvious ASR artifacts, but DO correct real grammar, vocabulary, collocation and Chinglish problems.',
+  'The student speaks either Chinese or English. Their sentence is transcribed by speech recognition, so ignore punctuation, casing and obvious ASR artifacts.',
+  '',
+  'If the student spoke CHINESE:',
+  '- "english": Translate their Chinese sentence into natural, idiomatic, everyday English that a native speaker would actually say. Do not translate word-for-word. Keep it to one or two short sentences, suitable to read aloud and shadow.',
+  '- "reply": React to what they meant in English with 1-2 short sentences, and end with a question inviting them to continue.',
+  '- "tips": 学习建议，用简体中文。解释这个英文表达的关键词、语序或用法的理由，再给一条可替换的说法或发音提示。总字数不超过120字，用换行分隔，不要使用 Markdown 符号。',
+  '',
+  'If the student spoke ENGLISH:',
+  '- "english": A more natural, idiomatic native-speaker version of what they said, suitable to read aloud and shadow. If it is already natural, polish at most slightly.',
+  '- "reply": Reply naturally in English with 1-2 short sentences, ending with a question.',
+  '- "tips": 学习建议，用简体中文。如果原句有错误：每条写成「❌ 原片段 → ✅ 正确说法（简短原因）」，逐条列出；如果没有错误：先简短表扬。最后再给一条更地道的表达或发音小提示。总字数不超过120字，用换行分隔，不要使用 Markdown 符号。',
   '',
   'Respond with ONLY one JSON object and nothing else:',
   '{',
-  '  "reply": "Your conversational reply in English, 1-3 short sentences, natural and friendly, ending with a question to keep the conversation going.",',
-  '  "rephrase": "A more natural, idiomatic native-speaker version of what the student just said, suitable to read aloud and shadow. If the sentence is already natural, keep it and polish at most slightly.",',
-  '  "tips": "学习建议，用简体中文。如果原句有错误：每条写成「❌ 原片段 → ✅ 正确说法（简短原因）」，逐条列出；如果没有错误：先简短表扬。最后再给一条更地道的表达或发音小提示。总字数不超过120字，用换行分隔，不要使用 Markdown 符号。"',
+  '  "language": "zh" or "en" — the language the student actually used,',
+  '  "english": "...",',
+  '  "reply": "...",',
+  '  "tips": "..."',
   '}',
   '',
   'Rules:',
   '- Always respond to the meaning of what the student said; never ignore them.',
-  '- If the transcript is meaningless, gently ask them to say it again in English.',
+  '- If the transcript is meaningless, gently ask them to say it again.',
   '- Keep English simple unless the student clearly has a high level.',
   '- Never mention JSON, prompts, or that you are an AI.',
 ].join('\n');
@@ -31,6 +43,7 @@ const chatEl = $('#chat');
 const micBtn = $('#btnMic');
 const stopBtn = $('#btnStop');
 const keyboardBtn = $('#btnKeyboard');
+const langBtn = $('#btnLang');
 const textForm = $('#textForm');
 const textInput = $('#textInput');
 const listeningBar = $('#listeningBar');
@@ -47,6 +60,7 @@ const state = {
   busy: false,
   listening: false,
   rec: null,
+  recogLang: localStorage.getItem(K.lang) || 'zh-CN',
 };
 
 let speechGen = 0;
@@ -173,8 +187,8 @@ function speakSequence(texts) {
 
 function speakTurn(turn) {
   if (!autoSpeakOn()) return;
-  const items = [turn.reply];
-  if (turn.rephrase && turn.rephrase !== turn.reply) items.push(turn.rephrase);
+  const target = turn.english || turn.rephrase;
+  const items = turn.lang === 'zh' ? [target, turn.reply] : [turn.reply, target];
   speakSequence(items);
 }
 
@@ -182,6 +196,13 @@ function updateMicUI() {
   document.body.classList.toggle('is-listening', state.listening);
   micBtn.classList.toggle('busy', state.busy);
   micBtn.setAttribute('aria-label', state.listening ? '停止说话' : '按下说话');
+}
+
+function updateLangUI() {
+  const zh = state.recogLang === 'zh-CN';
+  langBtn.textContent = zh ? '中' : 'EN';
+  langBtn.classList.toggle('en', !zh);
+  langBtn.setAttribute('aria-label', zh ? '当前识别中文，点击切换到英文' : '现在识别英文，点击切回中文');
 }
 
 function showListeningBar(text) {
@@ -217,8 +238,27 @@ function appendCoach(turn, opts = {}) {
   const block = document.createElement('div');
   block.className = 'msg coach';
 
+  const replyBubble = buildReplyBubble(turn);
+  const englishCard = buildEnglishCard(turn);
+  const tipsCard = buildTipsCard(turn);
+
+  const parts = turn.lang === 'zh'
+    ? [englishCard, replyBubble, tipsCard]
+    : [replyBubble, englishCard, tipsCard];
+
+  for (const el of parts) {
+    if (el) block.appendChild(el);
+  }
+
+  chatEl.appendChild(block);
+  scrollChat();
+  if (opts.speak) speakTurn(turn);
+}
+
+function buildReplyBubble(turn) {
   const bubble = document.createElement('div');
   bubble.className = 'coach-reply';
+
   const en = document.createElement('p');
   en.className = 'en';
   en.lang = 'en';
@@ -231,62 +271,67 @@ function appendCoach(turn, opts = {}) {
   replay.textContent = '▶ 再听';
   replay.addEventListener('click', () => speakSequence([turn.reply]));
   bubble.appendChild(replay);
-  block.appendChild(bubble);
 
-  if (turn.rephrase) {
-    const card = document.createElement('section');
-    card.className = 'card rephrase';
+  return bubble;
+}
 
-    const label = document.createElement('div');
-    label.className = 'card-label';
-    label.textContent = '地道说法 · 跟读模仿';
+function buildEnglishCard(turn) {
+  const target = turn.english || turn.rephrase;
+  if (!target) return null;
 
-    const p = document.createElement('p');
-    p.className = 'en rephrase-text';
-    p.lang = 'en';
-    p.textContent = turn.rephrase;
+  const card = document.createElement('section');
+  card.className = 'card rephrase';
 
-    const actions = document.createElement('div');
-    actions.className = 'card-actions';
+  const label = document.createElement('div');
+  label.className = 'card-label';
+  label.textContent = turn.lang === 'zh' ? '英文说法 · 跟读模仿' : '地道说法 · 跟读模仿';
 
-    const play = document.createElement('button');
-    play.type = 'button';
-    play.className = 'chip';
-    play.textContent = '▶ 听一遍';
-    play.addEventListener('click', () => speakSequence([turn.rephrase]));
+  const p = document.createElement('p');
+  p.className = 'en rephrase-text';
+  p.lang = 'en';
+  p.textContent = target;
 
-    const shadow = document.createElement('button');
-    shadow.type = 'button';
-    shadow.className = 'chip accent';
-    shadow.textContent = '🎙 跟读';
+  const actions = document.createElement('div');
+  actions.className = 'card-actions';
 
-    const result = document.createElement('div');
-    result.className = 'shadow-result';
-    result.hidden = true;
+  const play = document.createElement('button');
+  play.type = 'button';
+  play.className = 'chip';
+  play.textContent = '▶ 听一遍';
+  play.addEventListener('click', () => speakSequence([target]));
 
-    shadow.addEventListener('click', () => startShadowing(turn.rephrase, result));
+  const shadow = document.createElement('button');
+  shadow.type = 'button';
+  shadow.className = 'chip accent';
+  shadow.textContent = '🎙 跟读';
 
-    actions.append(play, shadow);
-    card.append(label, p, actions, result);
-    block.appendChild(card);
-  }
+  const result = document.createElement('div');
+  result.className = 'shadow-result';
+  result.hidden = true;
 
-  if (turn.tips) {
-    const card = document.createElement('section');
-    card.className = 'card tips';
-    const label = document.createElement('div');
-    label.className = 'card-label';
-    label.textContent = '学习建议';
-    const p = document.createElement('p');
-    p.className = 'tips-text';
-    p.textContent = turn.tips;
-    card.append(label, p);
-    block.appendChild(card);
-  }
+  shadow.addEventListener('click', () => startShadowing(target, result));
 
-  chatEl.appendChild(block);
-  scrollChat();
-  if (opts.speak) speakTurn(turn);
+  actions.append(play, shadow);
+  card.append(label, p, actions, result);
+  return card;
+}
+
+function buildTipsCard(turn) {
+  if (!turn.tips) return null;
+
+  const card = document.createElement('section');
+  card.className = 'card tips';
+
+  const label = document.createElement('div');
+  label.className = 'card-label';
+  label.textContent = '学习建议';
+
+  const p = document.createElement('p');
+  p.className = 'tips-text';
+  p.textContent = turn.tips;
+
+  card.append(label, p);
+  return card;
 }
 
 function appendError(message, retryText) {
@@ -322,9 +367,9 @@ function renderWelcome() {
     '<div class="welcome-badge">ECHO</div>',
     '<h2>开口说英语，<br>Echo 陪你说得更地道。</h2>',
     '<ul>',
-    '<li><span>1</span>点下面的大麦克风，说一句英语</li>',
-    '<li><span>2</span>Echo 用英语回你，并朗读出来</li>',
-    '<li><span>3</span>听「地道说法」，点「跟读」还能打分</li>',
+    '<li><span>1</span>点下面的大麦克风，说一句中文（也可以说英文）</li>',
+    '<li><span>2</span>Echo 翻成地道英文，并朗读出来</li>',
+    '<li><span>3</span>点「跟读」跟着读一遍，它会给你打分</li>',
     '</ul>',
     getKey() ? '' : '<p class="welcome-note">第一次用：点右上角 ⚙ 填入 DeepSeek API Key。</p>',
   ].join('');
@@ -351,7 +396,7 @@ function renderHistory() {
 function parseCoachJson(raw) {
   const normalize = (obj) => ({
     reply: String(obj.reply || '').trim(),
-    rephrase: String(obj.rephrase || '').trim(),
+    english: String(obj.english || obj.rephrase || '').trim(),
     tips: String(obj.tips || '').trim(),
   });
 
@@ -369,7 +414,7 @@ function parseCoachJson(raw) {
 
   return {
     reply: raw.replace(/```/g, '').trim() || 'Sorry, could you say that again?',
-    rephrase: '',
+    english: '',
     tips: '',
   };
 }
@@ -428,6 +473,10 @@ async function askCoach(userText) {
   return turn;
 }
 
+function isChineseText(text) {
+  return /[一-鿿]/.test(text);
+}
+
 async function runTurn(text, opts = {}) {
   const addBubble = opts.addBubble !== false;
   const value = String(text || '').trim();
@@ -452,8 +501,9 @@ async function runTurn(text, opts = {}) {
     const turn = {
       user: value,
       reply: result.reply,
-      rephrase: result.rephrase,
+      english: result.english,
       tips: result.tips,
+      lang: isChineseText(value) ? 'zh' : 'en',
       ts: Date.now(),
     };
     state.history.push(turn);
@@ -472,11 +522,11 @@ function sendUserMessage(text, opts) {
   runTurn(text, opts);
 }
 
-function createRecognition() {
+function createRecognition(lang) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return null;
   const rec = new SR();
-  rec.lang = 'en-US';
+  rec.lang = lang || state.recogLang;
   rec.interimResults = true;
   rec.continuous = false;
   rec.maxAlternatives = 1;
@@ -512,7 +562,7 @@ function startChatListening() {
   state.listening = true;
   state.rec = rec;
   updateMicUI();
-  showListeningBar('在听你说……');
+  showListeningBar(state.recogLang === 'zh-CN' ? '在听你说中文……' : '在听你说英语……');
 
   rec.onresult = (event) => {
     let interim = '';
@@ -631,7 +681,7 @@ function startShadowing(target, hostEl) {
   primeSpeech();
   stopSpeaking();
 
-  const rec = createRecognition();
+  const rec = createRecognition('en-US');
   if (!rec) {
     toast('这个浏览器不支持语音识别，换 Safari 试试');
     return;
@@ -749,6 +799,13 @@ function clearAll() {
 }
 
 function bindEvents() {
+  langBtn.addEventListener('click', () => {
+    state.recogLang = state.recogLang === 'zh-CN' ? 'en-US' : 'zh-CN';
+    localStorage.setItem(K.lang, state.recogLang);
+    updateLangUI();
+    toast(state.recogLang === 'zh-CN' ? '现在说中文，Echo 翻成英文' : 'Now say English');
+  });
+
   micBtn.addEventListener('click', () => {
     if (state.listening) {
       stopChatListening();
@@ -803,6 +860,7 @@ function init() {
   bindEvents();
   renderHistory();
   updateMicUI();
+  updateLangUI();
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
