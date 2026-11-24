@@ -18,13 +18,13 @@ const SYSTEM_PROMPT = [
   '- "english": Translate their Chinese sentence into natural, idiomatic, everyday English that a native speaker would actually say. Do not translate word-for-word. Keep it to one or two short sentences, suitable to read aloud and shadow.',
   '- "reply": React to what they meant in English with 1-2 short sentences, and end with a question inviting them to continue.',
   '- "tips": 学习建议，用简体中文。解释这个英文表达的关键词、语序或用法的理由，再给一条可替换的说法或发音提示。总字数不超过120字，用换行分隔，不要使用 Markdown 符号。',
-  '- "words": Array of 1-4 words or short phrases from your "english" version that a Chinese intermediate learner may not know. Each item: {"word": "word or short phrase", "ipa": "/American English IPA/", "meaning": "简体中文释义"}. If every word is very common, use [].',
+  '- "words": Array of 1-3 useful words or short phrases from your "english" version worth learning. Prioritize content words (nouns, verbs, adjectives, set phrases) over function words. Even if the words are fairly common, always pick the most useful 1-3. Use [] only if "english" is empty. Each item: {"word": "word or short phrase", "ipa": "/American English IPA/", "meaning": "简体中文释义"}.',
   '',
   'If the student spoke ENGLISH:',
   '- "english": A more natural, idiomatic native-speaker version of what they said, suitable to read aloud and shadow. If it is already natural, polish at most slightly.',
   '- "reply": Reply naturally in English with 1-2 short sentences, ending with a question.',
   '- "tips": 学习建议，用简体中文。如果原句有错误：每条写成「❌ 原片段 → ✅ 正确说法（简短原因）」，逐条列出；如果没有错误：先简短表扬。最后再给一条更地道的表达或发音小提示。总字数不超过120字，用换行分隔，不要使用 Markdown 符号。',
-  '- "words": Array of 1-4 words or short phrases from your "english" version that a Chinese intermediate learner may not know. Each item: {"word": "word or short phrase", "ipa": "/American English IPA/", "meaning": "简体中文释义"}. If every word is very common, use [].',
+  '- "words": Array of 1-3 useful words or short phrases from your "english" version worth learning. Prioritize content words (nouns, verbs, adjectives, set phrases) over function words. Even if the words are fairly common, always pick the most useful 1-3. Use [] only if "english" is empty. Each item: {"word": "word or short phrase", "ipa": "/American English IPA/", "meaning": "简体中文释义"}.',
   '',
   'Respond with ONLY one JSON object and nothing else:',
   '{',
@@ -486,21 +486,29 @@ function renderHistory() {
 }
 
 function parseWords(value) {
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
   if (!Array.isArray(value)) return [];
+
   const seen = new Set();
   const out = [];
 
   for (const item of value) {
     if (!item || typeof item !== 'object') continue;
-    const word = String(item.word || '').trim();
+    const word = String(item.word || item.term || item.text || '').trim();
     if (!word) continue;
     const key = word.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     out.push({
       word,
-      ipa: String(item.ipa || '').trim(),
-      meaning: String(item.meaning || '').trim(),
+      ipa: String(item.ipa || item.phonetic || item.phonetics || item.pronunciation || '').trim(),
+      meaning: String(item.meaning || item.definition || item.chinese || item.translation || '').trim(),
     });
     if (out.length >= 6) break;
   }
